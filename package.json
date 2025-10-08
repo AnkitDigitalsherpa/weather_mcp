@@ -8,7 +8,7 @@
     "weather": "./build/index.js"
   },
   "scripts": {
-    "build": "smithery build",
+    "build": "tsc",
     "dev": "smithery dev",
     "start": "node build/index.js"
   },
