@@ -100,34 +100,22 @@ app.post("/mcp", async (req, res) => {
     // Reuse existing transport
     transport = transports[sessionId];
   } else if (!sessionId && isInitializeRequest(req.body)) {
-    // New initialization request
-    // transport = new StreamableHTTPServerTransport({
-    //   sessionIdGenerator: () => randomUUID(),
-    //   onsessioninitialized: (sessionId) => {
-    //     // Store the transport by session ID
-    //     transports[sessionId] = transport;
-    //   },
-    //   // DNS rebinding protection is disabled by default for backwards compatibility. If you are running this server
-    //   // locally, make sure to set:
-    //   // enableDnsRebindingProtection: true,
-    //   // allowedHosts: ['127.0.0.1'],
-    // });
-
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sessionId) => {
+        console.log("MCP session initialized:", sessionId);
         transports[sessionId] = transport;
       },
       enableDnsRebindingProtection: true,
-      allowedHosts: ["*"], // Or add your domain/IP if remote
+      allowedHosts: ["*"], // Replace with actual host(s) in production
     });
-
     // Clean up transport when closed
     transport.onclose = () => {
       if (transport.sessionId) {
         delete transports[transport.sessionId];
       }
     };
+
     const server = new McpServer({
       name: "example-server",
       version: "1.0.0",
@@ -292,8 +280,9 @@ app.post("/mcp", async (req, res) => {
 
     // Connect to the MCP server
     await server.connect(transport);
-    // await transport.handleRequest(req, res, req.body);
-    // return;
+    console.log("Received MCP request:", req.body);
+    await transport.handleRequest(req, res, req.body); // MUST handle the initial request
+    return;
   } else {
     // Invalid request
     res.status(400).json({
