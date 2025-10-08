@@ -1,89 +1,91 @@
-import express from "express";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import fs from "fs";
 
 const NWS_API_BASE = "https://api.weather.gov";
 const USER_AGENT = "weather-app/1.0";
 
-const app = express();
-app.use(express.json());
-
-const PORT = process.env.PORT || 3000;
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "MCP Weather Server" });
+// Create server instance
+const server = new McpServer({
+  name: "weather",
+  version: "1.0.0",
+  capabilities: {
+    resources: {},
+    tools: {},
+  },
 });
 
-// Get weather alerts endpoint
-app.get("/api/alerts/:state", async (req, res) => {
-  try {
-    const state = req.params.state.toUpperCase();
+fs.writeFileSync("./server.txt", "step 1");
 
-    if (state.length !== 2) {
-      return res.status(400).json({
-        error: "State code must be 2 letters (e.g., CA, NY)",
-      });
-    }
-
-    const alertsUrl = `${NWS_API_BASE}/alerts?area=${state}`;
+// Register weather tools
+server.tool(
+  "get_alerts",
+  "Get weather alerts for a state",
+  {
+    state: z.string().length(2).describe("Two-letter state code (e.g. CA, NY)"),
+  },
+  async ({ state }) => {
+    fs.writeFileSync("./server.txt", "step 2");
+    const stateCode = state.toUpperCase();
+    const alertsUrl = `${NWS_API_BASE}/alerts?area=${stateCode}`;
     const alertsData = await makeNWSRequest<AlertsResponse>(alertsUrl);
 
     if (!alertsData) {
-      return res.status(500).json({
-        error: "Failed to retrieve alerts data",
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to retrieve alerts data",
+          },
+        ],
+      };
     }
 
     const features = alertsData.features || [];
     if (features.length === 0) {
-      return res.json({
-        state,
-        alerts: [],
-        message: `No active alerts for ${state}`,
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `No active alerts for ${stateCode}`,
+          },
+        ],
+      };
     }
-
+    fs.writeFileSync("./server.txt", "step 3");
     const formattedAlerts = features.map(formatAlert);
+    const alertsText = `Active alerts for ${stateCode}:\n\n${formattedAlerts.join(
+      "\n"
+    )}`;
 
-    res.json({
-      state,
-      alertCount: features.length,
-      alerts: formattedAlerts,
-    });
-  } catch (error) {
-    console.error("Error fetching alerts:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      details: error instanceof Error ? error.message : "Unknown error",
-    });
+    fs.writeFileSync("alerts.txt", alertsText);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: alertsText,
+        },
+      ],
+    };
   }
-});
+);
 
-// Get weather forecast endpoint
-app.get("/api/forecast", async (req, res) => {
-  try {
-    const latitude = parseFloat(req.query.latitude as string);
-    const longitude = parseFloat(req.query.longitude as string);
+server.tool(
+  "get_forecast",
+  "Get weather forecast for a location",
+  {
+    latitude: z.number().min(-90).max(90).describe("Latitude of the location"),
+    longitude: z
+      .number()
+      .min(-180)
+      .max(180)
+      .describe("Longitude of the location"),
+  },
 
-    if (isNaN(latitude) || isNaN(longitude)) {
-      return res.status(400).json({
-        error: "Valid latitude and longitude are required",
-      });
-    }
-
-    if (latitude < -90 || latitude > 90) {
-      return res.status(400).json({
-        error: "Latitude must be between -90 and 90",
-      });
-    }
-
-    if (longitude < -180 || longitude > 180) {
-      return res.status(400).json({
-        error: "Longitude must be between -180 and 180",
-      });
-    }
-
+  async ({ latitude, longitude }) => {
+    fs.writeFileSync("./server.txt", "step 4");
     // Get grid point data
     const pointsUrl = `${NWS_API_BASE}/points/${latitude.toFixed(
       4
@@ -91,56 +93,80 @@ app.get("/api/forecast", async (req, res) => {
     const pointsData = await makeNWSRequest<PointsResponse>(pointsUrl);
 
     if (!pointsData) {
-      return res.status(404).json({
-        error: `Failed to retrieve grid point data for coordinates: ${latitude}, ${longitude}. This location may not be supported by the NWS API (only US locations are supported).`,
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to retrieve grid point data for coordinates: ${latitude}, ${longitude}. This location may not be supported by the NWS API (only US locations are supported).`,
+          },
+        ],
+      };
     }
 
     const forecastUrl = pointsData.properties?.forecast;
     if (!forecastUrl) {
-      return res.status(500).json({
-        error: "Failed to get forecast URL from grid point data",
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to get forecast URL from grid point data",
+          },
+        ],
+      };
     }
 
     // Get forecast data
     const forecastData = await makeNWSRequest<ForecastResponse>(forecastUrl);
     if (!forecastData) {
-      return res.status(500).json({
-        error: "Failed to retrieve forecast data",
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Failed to retrieve forecast data",
+          },
+        ],
+      };
     }
 
     const periods = forecastData.properties?.periods || [];
     if (periods.length === 0) {
-      return res.json({
-        latitude,
-        longitude,
-        periods: [],
-        message: "No forecast periods available",
-      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No forecast periods available",
+          },
+        ],
+      };
     }
 
-    res.json({
-      latitude,
-      longitude,
-      periods: periods.map((period: ForecastPeriod) => ({
-        name: period.name || "Unknown",
-        temperature: period.temperature,
-        temperatureUnit: period.temperatureUnit || "F",
-        windSpeed: period.windSpeed || "Unknown",
-        windDirection: period.windDirection || "",
-        shortForecast: period.shortForecast || "No forecast available",
-      })),
-    });
-  } catch (error) {
-    console.error("Error fetching forecast:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      details: error instanceof Error ? error.message : "Unknown error",
-    });
+    // Format forecast periods
+    const formattedForecast = periods.map((period: ForecastPeriod) =>
+      [
+        `${period.name || "Unknown"}:`,
+        `Temperature: ${period.temperature || "Unknown"}°${
+          period.temperatureUnit || "F"
+        }`,
+        `Wind: ${period.windSpeed || "Unknown"} ${period.windDirection || ""}`,
+        `${period.shortForecast || "No forecast available"}`,
+        "---",
+      ].join("\n")
+    );
+
+    const forecastText = `Forecast for ${latitude}, ${longitude}:\n\n${formattedForecast.join(
+      "\n"
+    )}`;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: forecastText,
+        },
+      ],
+    };
   }
-});
+);
 
 // Helper function for making NWS API requests
 async function makeNWSRequest<T>(url: string): Promise<T | null> {
@@ -149,6 +175,7 @@ async function makeNWSRequest<T>(url: string): Promise<T | null> {
     Accept: "application/geo+json",
   };
 
+  fs.writeFileSync("./server.txt", "step 5");
   try {
     const response = await fetch(url, { headers });
     if (!response.ok) {
@@ -161,19 +188,6 @@ async function makeNWSRequest<T>(url: string): Promise<T | null> {
   }
 }
 
-// Format alert data
-function formatAlert(feature: AlertFeature) {
-  const props = feature.properties;
-  return {
-    event: props.event || "Unknown",
-    area: props.areaDesc || "Unknown",
-    severity: props.severity || "Unknown",
-    status: props.status || "Unknown",
-    headline: props.headline || "No headline",
-  };
-}
-
-// Type definitions
 interface AlertFeature {
   properties: {
     event?: string;
@@ -182,6 +196,19 @@ interface AlertFeature {
     status?: string;
     headline?: string;
   };
+}
+
+// Format alert data
+function formatAlert(feature: AlertFeature): string {
+  const props = feature.properties;
+  return [
+    `Event: ${props.event || "Unknown"}`,
+    `Area: ${props.areaDesc || "Unknown"}`,
+    `Severity: ${props.severity || "Unknown"}`,
+    `Status: ${props.status || "Unknown"}`,
+    `Headline: ${props.headline || "No headline"}`,
+    "---",
+  ].join("\n");
 }
 
 interface ForecastPeriod {
@@ -209,11 +236,13 @@ interface ForecastResponse {
   };
 }
 
-app.listen(PORT, () => {
-  console.log(`Weather API Server running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`Alerts: http://localhost:${PORT}/api/alerts/:state`);
-  console.log(
-    `Forecast: http://localhost:${PORT}/api/forecast?latitude=X&longitude=Y`
-  );
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Weather MCP Server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
 });
