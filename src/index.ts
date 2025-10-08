@@ -94,32 +94,32 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 app.post("/mcp", async (req, res) => {
   // Check for existing session ID
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  // let transport: StreamableHTTPServerTransport;
-  let transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
-    onsessioninitialized: (sessionId) => {
-      transports[sessionId] = transport;
-    },
-    enableJsonResponse: true,
-    enableDnsRebindingProtection: true,
-    // allowedHosts: ["*"], // Or add your domain/IP if remote
-  });
+  let transport: StreamableHTTPServerTransport;
 
   if (sessionId && transports[sessionId]) {
     // Reuse existing transport
     transport = transports[sessionId];
   } else if (!sessionId && isInitializeRequest(req.body)) {
     // New initialization request
+    // transport = new StreamableHTTPServerTransport({
+    //   sessionIdGenerator: () => randomUUID(),
+    //   onsessioninitialized: (sessionId) => {
+    //     // Store the transport by session ID
+    //     transports[sessionId] = transport;
+    //   },
+    //   // DNS rebinding protection is disabled by default for backwards compatibility. If you are running this server
+    //   // locally, make sure to set:
+    //   // enableDnsRebindingProtection: true,
+    //   // allowedHosts: ['127.0.0.1'],
+    // });
+
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sessionId) => {
-        // Store the transport by session ID
         transports[sessionId] = transport;
       },
-      // DNS rebinding protection is disabled by default for backwards compatibility. If you are running this server
-      // locally, make sure to set:
-      // enableDnsRebindingProtection: true,
-      // allowedHosts: ['127.0.0.1'],
+      enableDnsRebindingProtection: true,
+      allowedHosts: ["*"], // Or add your domain/IP if remote
     });
 
     // Clean up transport when closed
@@ -292,8 +292,8 @@ app.post("/mcp", async (req, res) => {
 
     // Connect to the MCP server
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-    return;
+    // await transport.handleRequest(req, res, req.body);
+    // return;
   } else {
     // Invalid request
     res.status(400).json({
