@@ -1,6 +1,18 @@
-runtime: "typescript"
+runtime: "container"
+
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    # properties:
+    #   apiKey:
+    #     type: "string"
+    #     description: "Your API key"
+    # required: ["apiKey"]
+
 build:
   dockerfile: "Dockerfile"
   dockerBuildPath: "."
-startCommand:
-  type: "http"
+
+env:
+  NODE_ENV: "production"
