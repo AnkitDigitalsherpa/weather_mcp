@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { HttpServerTransport  } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import fs from "fs";
 
@@ -239,9 +239,10 @@ interface ForecastResponse {
 async function main() {
   const port = process.env.PORT || 3000;
 
-  const transport = new HttpServerTransport({
-    port: Number(port),
-    endpoint: "/mcp",
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => crypto.randomUUID(),
+    // port: Number(port),
+    // endpoint: "/mcp",
   });
 
   await server.connect(transport);
