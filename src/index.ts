@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { HttpServerTransport  } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import fs from "fs";
 
@@ -237,9 +237,15 @@ interface ForecastResponse {
 }
 
 async function main() {
-  const transport = new StdioServerTransport();
+  const port = process.env.PORT || 3000;
+
+  const transport = new HttpServerTransport({
+    port: Number(port),
+    endpoint: "/mcp",
+  });
+
   await server.connect(transport);
-  console.error("Weather MCP Server running on stdio");
+  console.error(`Weather MCP Server running at http://localhost:${port}/mcp`);
 }
 
 main().catch((error) => {
