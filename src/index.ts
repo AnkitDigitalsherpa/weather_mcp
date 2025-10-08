@@ -12,6 +12,8 @@ const USER_AGENT = "weather-app/1.0";
 const app = express();
 app.use(express.json());
 
+app.options("/mcp", cors());
+
 async function makeNWSRequest<T>(url: string): Promise<T | null> {
   const headers = {
     "User-Agent": USER_AGENT,
@@ -92,6 +94,10 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 
 // Handle POST requests for client-to-server communication
 app.post("/mcp", async (req, res) => {
+  console.log("Incoming POST:", req.body);
+  if (isInitializeRequest(req.body)) {
+    console.log("→ This is an MCP initialize request");
+  }
   // Check for existing session ID
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   let transport: StreamableHTTPServerTransport;
@@ -103,11 +109,12 @@ app.post("/mcp", async (req, res) => {
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sessionId) => {
+        console.log("✅ MCP session initialized:", sessionId);
         console.log("MCP session initialized:", sessionId);
         transports[sessionId] = transport;
       },
       enableDnsRebindingProtection: true,
-      allowedHosts: ["*"], // Replace with actual host(s) in production
+      // allowedHosts: ["*"], // Replace with actual host(s) in production
     });
     // Clean up transport when closed
     transport.onclose = () => {
