@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express from "express";
 import { z } from "zod";
@@ -241,6 +241,23 @@ server.tool(
       ],
     };
   }
+);
+
+server.registerResource(
+    'greeting',
+    new ResourceTemplate('greeting://{name}', { list: undefined }),
+    {
+        title: 'Greeting Resource', // Display name for UI
+        description: 'Dynamic greeting generator'
+    },
+    async (uri, { name }) => ({
+        contents: [
+            {
+                uri: uri.href,
+                text: `Hello, ${name}!`
+            }
+        ]
+    })
 );
 
 app.post("/mcp", async (req, res) => {
