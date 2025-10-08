@@ -94,7 +94,16 @@ const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 app.post("/mcp", async (req, res) => {
   // Check for existing session ID
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  let transport: StreamableHTTPServerTransport;
+  // let transport: StreamableHTTPServerTransport;
+  let transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+    onsessioninitialized: (sessionId) => {
+      transports[sessionId] = transport;
+    },
+    enableJsonResponse: true,
+    enableDnsRebindingProtection: true,
+    // allowedHosts: ["*"], // Or add your domain/IP if remote
+  });
 
   if (sessionId && transports[sessionId]) {
     // Reuse existing transport
@@ -283,6 +292,8 @@ app.post("/mcp", async (req, res) => {
 
     // Connect to the MCP server
     await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+    return;
   } else {
     // Invalid request
     res.status(400).json({
